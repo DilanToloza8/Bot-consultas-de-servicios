@@ -1,0 +1,6 @@
+# Ignorar credenciales y entorno
+.env
+__pycache__/
+*.pyc
+.vscode/
+venv/
