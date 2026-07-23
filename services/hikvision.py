@@ -6,44 +6,59 @@ load_dotenv()
 
 def obtener_estado_camaras():
     """
-    Obtiene el estado de los DVRs/Cámaras leyendo la Status Page de Uptime Kuma.
+    Obtiene el estado real de los DVRs/Cámaras consultando la estructura 
+    y los latidos en tiempo real de Uptime Kuma.
     """
-    # URL del JSON de la Status Page de Kuma
     base_url = os.getenv("KUMA_API_URL", "http://100.101.28.41:3001")
-    # Usamos la slug 'dvr' que vimos en tu navegador (http://100.101.28.41:3001/status/dvr)
     slug = "dvr" 
     
-    url = f"{base_url}/api/status-page/{slug}"
+    url_info = f"{base_url}/api/status-page/{slug}"
+    url_heartbeats = f"{base_url}/api/status-page/heartbeat/{slug}"
 
     try:
-        response = requests.get(url, timeout=5)
-        
-        if response.status_code == 200:
-            data = response.json()
-            
-            # Kuma devuelve la estructura de la página de estado
-            public_group_list = data.get("publicGroupList", [])
-            heartbeat_list = data.get("uptimeGroupList", {}) # O el estado de los heartbeats
-            
+        # 1. Obtener la lista de monitores (nombres e IDs)
+        resp_info = requests.get(url_info, timeout=5)
+        # 2. Obtener los latidos/estados en tiempo real
+        resp_hb = requests.get(url_heartbeats, timeout=5)
+
+        if resp_info.status_code == 200:
+            data_info = resp_info.json()
+            data_hb = resp_hb.json() if resp_hb.status_code == 200 else {}
+
+            public_group_list = data_info.get("publicGroupList", [])
+            heartbeat_list = data_hb.get("heartbeatList", {})
+            uptime_group_list = data_hb.get("uptimeGroupList", {})
+
             lista_camaras = []
             totales = 0
             online_count = 0
 
-            # Recorrer los monitores asignados a esa Status Page
+            # Recorrer cada monitor configurado
             for group in public_group_list:
                 for monitor in group.get("monitorList", []):
                     totales += 1
                     nombre = monitor.get("name", "DVR/Cámara")
-                    
-                    # Chequear el último estado registrado en la Status Page
-                    # En Kuma: 1 = UP (Online), 0 = DOWN (Offline), 2 = PENDING
-                    monitor_id = str(monitor.get("id"))
-                    
-                    # Intentar obtener el estado actual
-                    # Si no viene en la lista directa, validamos la propiedad 'active'
-                    status_code = monitor.get("status", 1) 
-                    
-                    if status_code == 1:
+                    monitor_id_str = str(monitor.get("id"))
+
+                    # Determinar si está Online (1) u Offline (0)
+                    is_online = False
+
+                    # Método A: Buscar en el último latido (heartbeatList)
+                    if monitor_id_str in heartbeat_list:
+                        hbs = heartbeat_list[monitor_id_str]
+                        if isinstance(hbs, list) and len(hbs) > 0:
+                            # El último heartbeat de la lista es el más reciente
+                            ultimo_status = hbs[-1].get("status")
+                            is_online = (ultimo_status == 1)
+                        elif isinstance(hbs, dict):
+                            is_online = (hbs.get("status") == 1)
+
+                    # Método B: Fallback con uptimeGroupList si existe
+                    elif uptime_group_list and monitor_id_str in uptime_group_list:
+                        is_online = (uptime_group_list[monitor_id_str] == 1)
+
+                    # Formatear estado
+                    if is_online:
                         estado_str = "🟢 Online"
                         online_count += 1
                     else:
@@ -55,13 +70,12 @@ def obtener_estado_camaras():
                     })
 
             if totales == 0:
-                # Si no se agruparon por la Status Page, se avisa
                 return {
                     "resumen": "⚠️ No se encontraron monitores en la página /status/dvr.",
                     "camaras": []
                 }
 
-            resumen_texto = f"{online_count}/{totales} Dispositivos Online"
+            resumen_texto = f"CCTV: {online_count}/{totales} Dispositivos Online"
             if online_count < totales:
                 resumen_texto += f" (⚠️ {totales - online_count} caído/s)"
 
@@ -71,9 +85,8 @@ def obtener_estado_camaras():
             }
 
         else:
-            # Fallback si no existe la Status Page 'dvr'
             return {
-                "resumen": f"⚠️ Error {response.status_code} consultando la status page '/status/dvr'",
+                "resumen": f"⚠️ Error {resp_info.status_code} consultando /status/dvr",
                 "camaras": []
             }
 

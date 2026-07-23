@@ -36,7 +36,7 @@ with st.sidebar:
     if st.button("🔄 Actualizar Estado"):
         st.rerun()
 
-    # Seccion: Uptime Kuma
+    # Sección: Uptime Kuma
     st.subheader("📡 Diagnóstico de Red")
     estado_kuma = obtener_estado_kuma()
     if "🟢" in estado_kuma:
@@ -46,7 +46,7 @@ with st.sidebar:
     else:
         st.error(estado_kuma)
 
-    # Seccion: HikCentral CCTV
+    # Sección: HikCentral / CCTV (vía Uptime Kuma)
     st.subheader("📹 Estado de CCTV")
     info_cctv = obtener_estado_camaras()
     st.info(info_cctv["resumen"])
@@ -58,7 +58,7 @@ with st.sidebar:
 
     st.markdown("---")
     
-    # Seccion: LoRaWAN (ChirpStack)
+    # Sección: LoRaWAN (ChirpStack)
     st.markdown("### 🛰️ LoRaWAN (ChirpStack)")
     st.info("Próximamente: Integración de sensores")
 
@@ -74,7 +74,7 @@ for msg in st.session_state.messages:
     st.chat_message(msg["role"], avatar=avatar).write(msg["content"])
 
 # Capturar consulta del usuario
-if prompt := st.chat_input("Escribe tu consulta aquí (ej: ¿Cómo están las cámaras?)..."):
+if prompt := st.chat_input("Escribe tu consulta aquí (ej: ¿Cómo está el dvr de sewell c98?)..."):
     
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.chat_message("user", avatar="👤").write(prompt)
@@ -82,6 +82,14 @@ if prompt := st.chat_input("Escribe tu consulta aquí (ej: ¿Cómo están las c�
     if not groq_client:
         st.error("❌ Falta la variable GROQ_API_KEY en el archivo .env.")
     else:
+        # Construir el texto con el detalle de cada cámara/DVR
+        detalle_camaras_texto = ""
+        if info_cctv.get("camaras"):
+            for cam in info_cctv["camaras"]:
+                detalle_camaras_texto += f"- {cam['nombre']}: {cam['estado']}\n"
+        else:
+            detalle_camaras_texto = "No hay detalle individual disponible."
+
         # Contexto dinámico enviado a Groq en tiempo real
         prompt_sistema = f"""
 Eres un asistente de infraestructura de TI especializado en el Servidor Dell del usuario.
@@ -89,7 +97,10 @@ Responde de forma clara, directa, técnica y concisa.
 
 --- ESTADO EN TIEMPO REAL DEL SISTEMA ---
 - Monitoreo Uptime Kuma: {estado_kuma}
-- Estado CCTV (HikCentral): {info_cctv['resumen']}
+- Resumen CCTV: {info_cctv['resumen']}
+
+- Detalle individual de DVRs/Cámaras CCTV:
+{detalle_camaras_texto}
 ----------------------------------------
 
 Pregunta del usuario: {prompt}
