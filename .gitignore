@@ -1,6 +1,13 @@
-# Ignorar credenciales y entorno
+# Archivos de entorno y claves privadas
 .env
+*.env
+
+# Entorno virtual de Python
+venv/
+.venv/
+env/
+
+# Caché de Python y Streamlit
 __pycache__/
 *.pyc
-.vscode/
-venv/
+.streamlit/secrets.toml
